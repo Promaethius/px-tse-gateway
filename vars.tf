@@ -56,7 +56,9 @@ variable "gateway" {
             calico-versions = ["3.15"]
             csi-versions    = ["2.2.0"]
             extras          = [
-                "plndr/kube-vip:0.3.2"            ]
+                "plndr/kube-vip:0.3.2",
+                "quay.io/coreos/prometheus-operator:v0.34.0"
+            ]
         }
     }
     validation{
