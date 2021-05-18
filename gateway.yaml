@@ -1,0 +1,157 @@
+passwd:
+  users:
+    - name: core
+      ssh_authorized_keys:
+        - "${ssh-rsa}"
+storage:
+  files:
+    - path: /etc/hostname
+      mode: 644
+      contents:
+        inline: |
+          ${hostname}
+networkd:
+  units:
+    - name: static.network
+      contents: |
+        [Match]
+        Name=ens192
+        [Network]
+        Address=${public-static}
+        Gateway=${public-gateway}
+        DNS=${subnet-gateway}
+        DNS=8.8.8.8
+        DNS=8.8.4.4
+    - name: subnet.network
+      contents: |
+        [Match]
+        Name=ens224
+        [Network]
+        Address=${subnet-gateway}
+systemd:
+  units:
+    - name: systemd-resolved.service
+      enabled: false
+      mask: true
+    - name: router.service
+      enabled: true
+      contents: |
+        [Unit]
+        Description=Router
+        Type=oneshot
+        After=docker.service
+        Requires=docker.service
+
+        [Service]
+        TimeoutStartSec=0
+        RemainAfterExit=yes
+        ExecStart=/opt/router.sh apply
+        ExecStop=/opt/router.sh delete
+
+        [Install]
+        WantedBy=multi-user.target
+    - name: registry-certificates.service
+      enabled: true
+      contents: |
+        [Unit]
+        Description=Registry-Certificates
+        Type=oneshot
+        After=docker.service
+
+        [Service]
+        TimeoutStartSec=0
+        ExecStart=/opt/registry.sh certificates
+
+        [Install]
+        WantedBy=multi-user.target
+    - name: registry.service
+      enabled: true
+      contents: |
+        [Unit]
+        Description=Registry
+        After=docker.service
+        After=router.service
+        After=dnsmasq.service
+        After=repo.service
+        After=etcd.service
+        After=registry-certificates.service
+        Requires=docker.service
+
+        [Service]
+        Environment=PX_VERSIONS="${px-versions}"
+        Environment=K8S_VERSIONS="${k8s-versions}"
+        Environment=CALICO_VERSIONS="${calico-versions}"
+        Environment=CSI_VERSIONS="${csi-versions}"
+        Environment=EXTRAS="${extras}"
+        TimeoutStartSec=0
+        Restart=always
+        RestartSec=10
+        ExecStartPre=-/opt/registry.sh pre
+        ExecStartPre=/opt/registry.sh load
+        ExecStartPre=-/opt/registry.sh pre
+        ExecStart=/opt/registry.sh run
+
+        [Install]
+        WantedBy=multi-user.target
+    - name: dnsmasq.service
+      enabled: true
+      contents: |
+        [Unit]
+        Description=Dnsmasq
+        After=docker.service
+        After=router.service
+        After=registry-certificates.service
+        Requires=docker.service
+
+        [Service]
+        Environment=SUBNET_MIN="${subnet-min}"
+        Environment=SUBNET_MAX="${subnet-max}"
+        Environment=INTRA_DNS="${intra-dns}"
+        TimeoutStartSec=0
+        Restart=always
+        RestartSec=10
+        ExecStartPre=-/opt/dnsmasq.sh build
+        ExecStartPre=-/opt/dnsmasq.sh pre
+        ExecStartPre=-/opt/dnsmasq.sh render
+        ExecStart=/opt/dnsmasq.sh run
+
+        [Install]
+        WantedBy=multi-user.target
+    - name: repo.service
+      enabled: true
+      contents: |
+        [Unit]
+        Description=Repo
+        After=docker.service
+        After=dnsmasq.service
+        Requires=docker.service
+
+        [Service]
+        TimeoutStartSec=0
+        Restart=always
+        RestartSec=10
+        ExecStartPre=-/opt/repo.sh pre
+        ExecStart=/opt/repo.sh run
+
+        [Install]
+        WantedBy=multi-user.target
+    - name: etcd.service
+      enabled: true
+      contents: |
+        [Unit]
+        Description=Etcd
+        After=docker.service
+        After=registry-certificates.service
+        After=dnsmasq.service
+        After=repo.service
+        Requires=docker.service
+
+        [Service]
+        TimeoutStartSec=0
+        Restart=always
+        RestartSec=10
+        ExecStartPre=-/opt/etcd.sh pre
+        ExecStart=/opt/etcd.sh run
+
+        [Install]
+        WantedBy=multi-user.target
