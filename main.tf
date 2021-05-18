@@ -128,7 +128,7 @@ resource "vsphere_virtual_machine" "gateway" {
     }
 
     dynamic "ovf_deploy" {
-        for_each = fileexists("${path.module}/flatcar_production_vmware_ova.ova") ? [] : [1]
+        for_each = fileexists("./flatcar_production_vmware_ova.ova") ? [] : [1]
         content {
             remote_ovf_url    = "https://stable.release.flatcar-linux.net/amd64-usr/current/flatcar_production_vmware_ova.ova"
             disk_provisioning = "thin"
@@ -136,9 +136,9 @@ resource "vsphere_virtual_machine" "gateway" {
     }
 
     dynamic "ovf_deploy" {
-        for_each = fileexists("${path.module}/flatcar_production_vmware_ova.ova") ? [1] : []
+        for_each = fileexists("./flatcar_production_vmware_ova.ova") ? [1] : []
         content {
-            local_ovf_path    = "${path.module}/flatcar_production_vmware_ova.ova"
+            local_ovf_path    = "./flatcar_production_vmware_ova.ova"
             disk_provisioning = "thin"
         }
     }
