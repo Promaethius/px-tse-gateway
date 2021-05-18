@@ -35,6 +35,32 @@ module "gateway" {
             intra_dns = [""] #Optional internal DNS Nameservers.
         }
     }
+
+    gateway = {
+        hostname       = "gateway"
+        ssh-rsa        = ""
+        public-static  = "10.15.84.x" #Required
+        public-gateway = "10.15.84.1"
+        subnet         = {
+            gateway   = "192.167.0.1"
+            min       = ""
+            max       = ""
+            intra_dns = ["10.14.250.53", "10.14.250.250"]
+        }
+        loader         = {
+            px-versions     = ["2.6.0", "2.7.0"]
+            k8s-versions    = ["1.18.2", "1.20.1"]
+            calico-versions = ["3.15"]
+            csi-versions    = ["2.2.0"]
+            extras          = [
+                "plndr/kube-vip:0.3.2",
+                "quay.io/coreos/prometheus-operator:v0.34.0",
+                "quay.io/coreos/prometheus-config-reloader:v0.34.0",
+                "quay.io/coreos/configmap-reload:v0.0.1",
+                "quay.io/prometheus/prometheus:v2.7.1"
+            ]
+        }
+    }
 }
 ```
 Once provisioned, you should be able to ssh into the gateway with the static address you specified.
