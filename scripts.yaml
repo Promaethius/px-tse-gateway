@@ -236,6 +236,9 @@ storage:
               rootdirectory: /var/lib/registry
             delete:
               enabled: false
+          compatibility:
+            schema1:
+              enabled: true
           "
 
           _certificates() {
@@ -306,7 +309,6 @@ storage:
                           "k8s.gcr.io/kube-controller-manager:v$_k8s"
                           "k8s.gcr.io/kube-scheduler:v$_k8s"
                           "k8s.gcr.io/kube-proxy:v$_k8s"
-                          "gcr.io/cloud-provider-vsphere/cpi/release/manager:v$_k8s"
                       )
                       _minor=`echo $_k8s | cut -d . -f 1-2`
                       _k8s_constants="`curl https://raw.githubusercontent.com/kubernetes/kubernetes/release-$_minor/cmd/kubeadm/app/constants/constants.go 2>/dev/null`"

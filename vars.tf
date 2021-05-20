@@ -148,7 +148,8 @@ variable "gateway_loader_extras" {
                     "quay.io/coreos/prometheus-operator:v0.34.0",
                     "quay.io/coreos/prometheus-config-reloader:v0.34.0",
                     "quay.io/coreos/configmap-reload:v0.0.1",
-                    "quay.io/prometheus/prometheus:v2.7.1"
+                    "quay.io/prometheus/prometheus:v2.7.1",
+                    "gcr.io/cloud-provider-vsphere/cpi/release/manager:v1.18.1"
                 ]
     description = "Additional container images to load into registry."
 }
