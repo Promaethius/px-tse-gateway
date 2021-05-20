@@ -1,5 +1,5 @@
 variable "vsphere" {
-    type = object({
+    type        = object({
         user       = string
         password   = string
         server     = string
@@ -8,7 +8,7 @@ variable "vsphere" {
         datacenter = string
         folderpath = string
     })
-    default = {
+    default     = {
         user       = ""
         password   = ""
         server     = ""
@@ -17,67 +17,129 @@ variable "vsphere" {
         datastore  = ""
         folderpath = ""
     }
+    description = ""
 }
 
-variable "gateway" {
-    type = object({
-        hostname       = string
-        ssh-rsa        = string
-        public-static  = string
-        public-gateway = string
-        subnet         = object({
-            gateway   = string
-            min       = string
-            max       = string
-            intra_dns = list(string)
-        })
-        loader         = object({
-            px-versions     = list(string)
-            k8s-versions    = list(string)
-            calico-versions = list(string)
-            csi-versions    = list(string)
-            extras          = list(string)
-        })
-    })
-    default = {
-        hostname       = "gateway"
-        ssh-rsa        = ""
-        public-static  = "10.15.84.25"
-        public-gateway = "10.15.84.1"
-        subnet         = {
-            gateway   = "192.167.0.1"
-            min       = ""
-            max       = ""
-            intra_dns = ["10.14.250.53", "10.14.250.250"]
-        }
-        loader         = {
-            px-versions     = ["2.6.0", "2.7.0"]
-            k8s-versions    = ["1.18.2", "1.20.1"]
-            calico-versions = ["3.15"]
-            csi-versions    = ["2.2.0"]
-            extras          = [
-                "plndr/kube-vip:0.3.2",
-                "quay.io/coreos/prometheus-operator:v0.34.0",
-                "quay.io/coreos/prometheus-config-reloader:v0.34.0",
-                "quay.io/coreos/configmap-reload:v0.0.1",
-                "quay.io/prometheus/prometheus:v2.7.1"
-            ]
-        }
-    }
-    validation{
-        condition = can(
-            (try(cidrhost("${var.gateway.public-static}/0", 0)) != "" ? true : false) &&
-            (try(cidrhost("${var.gateway.public-gateway}/0", 0)) != "" ? true : false) &&
-            (try(cidrhost("${var.gateway.subnet.gateway}/0", 0)) != "" ? true : false) &&
-            (var.gateway.subnet.min == "" ? true : (try(cidrhost("${var.gateway.subnet.min}/0", 0)) != "" ? true : false)) &&
-            (var.gateway.subnet.max == "" ? true : (try(cidrhost("${var.gateway.subnet.max}/0", 0)) != "" ? true : false)) &&
-            (length([for ip in var.gateway.subnet.intra_dns : (try(cidrhost("${ip}/0", 0)) != "" ? true : false)]) == length(var.gateway.subnet.intra_dns)) &&
+variable "gateway_hostname" {
+    type        = string
+    default     = "gateway"
+    description = ""
+}
 
-            (length([for version in var.gateway.loader.px-versions : regex("^(0|[1-9][0-9]*)[.](0|[1-9][0-9]*)[.](0|[1-9][0-9]*)$", version)]) == length(var.gateway.loader.px-versions)) &&
-            (length([for version in var.gateway.loader.k8s-versions : regex("^(0|[1-9][0-9]*)[.](0|[1-9][0-9]*)[.](0|[1-9][0-9]*)$", version)]) == length(var.gateway.loader.k8s-versions)) &&
-            (length([for version in var.gateway.loader.calico-versions : regex("^(0|[1-9][0-9]*)[.](0|[1-9][0-9]*)(|[.](0|[1-9][0-9]*))$", version)]) == length(var.gateway.loader.calico-versions)) &&
-            (length([for version in var.gateway.loader.csi-versions : regex("^(0|[1-9][0-9]*)[.](0|[1-9][0-9]*)[.](0|[1-9][0-9]*)$", version)]) == length(var.gateway.loader.csi-versions))
-        )
-        error_message = "Gateway: Failed regex check on IPv4 or semantic versioning."
+variable "gateway_ssh" {
+    type        = string
+    default     = ""
+    description = ""
+}
+
+variable "gateway_public_ip" {
+    type        = string
+    default     = "10.15.84.25"
+    description = ""
+    validation {
+        condition = can(try(cidrhost("${var.gateway_public_ip}/0", 0)) != "" ? true : false)
+        error_message = "Failed IPv4 check for gateway_public_ip."
     }
+}
+
+variable "gateway_public_gateway" {
+    type        = string
+    default     = "10.15.84.1"
+    description = ""
+    validation {
+        condition = can(try(cidrhost("${var.gateway_public_gateway}/0", 0)) != "" ? true : false)
+        error_message = "Failed IPv4 check for gateway_public_gateway."
+    }
+}
+
+variable "gateway_subnet_gateway" {
+    type        = string
+    default     = "192.167.0.1"
+    description = ""
+    validation {
+        condition = can(try(cidrhost("${var.gateway_subnet_gateway}/0", 0)) != "" ? true : false)
+        error_message = "Failed IPv4 check for gateway_subnet_gateway."
+    }
+}
+
+variable "gateway_subnet_min" {
+    type        = string
+    default     = ""
+    description = ""
+    validation {
+        condition = can(var.gateway_subnet_min == "" ? true : (try(cidrhost("${var.gateway_subnet_min}/0", 0)) != "" ? true : false))
+        error_message = "Failed IPv4 check for gateway_subnet_min."
+    }
+}
+
+variable "gateway_subnet_max" {
+    type        = string
+    default     = ""
+    description = ""
+    validation {
+        condition = can(var.gateway_subnet_max == "" ? true : (try(cidrhost("${var.gateway_subnet_max}/0", 0)) != "" ? true : false))
+        error_message = "Failed IPv4 check for gateway_subnet_max."
+    }
+}
+
+variable "gateway_subnet_intra_dns" {
+    type        = list(string)
+    default     = ["10.14.250.53", "10.14.250.250"]
+    description = ""
+    validation {
+        condition = can(length([for ip in var.gateway_subnet_intra_dns : (try(cidrhost("${ip}/0", 0)) != "" ? true : false)]) == length(var.gateway_subnet_intra_dns))
+        error_message = "Failed IPv4 check for gateway_subnet_intra_dns."
+    }
+}
+
+variable "gateway_loader_px_versions" {
+    type        = list(string)
+    default     = ["2.6.0", "2.7.0"]
+    description = ""
+    validation {
+        condition = can(length([for version in var.gateway_loader_px_versions : regex("^(0|[1-9][0-9]*)[.](0|[1-9][0-9]*)[.](0|[1-9][0-9]*)$", version)]) == length(var.gateway_loader_px_versions))
+        error_message = "Failed Semantic Version check for gateway_loader_px_versions."
+    }
+}
+
+variable "gateway_loader_k8s_versions" {
+    type        = list(string)
+    default     = ["1.18.2", "1.20.1"]
+    description = ""
+    validation {
+        condition = can(length([for version in var.gateway_loader_k8s_versions : regex("^(0|[1-9][0-9]*)[.](0|[1-9][0-9]*)[.](0|[1-9][0-9]*)$", version)]) == length(var.gateway_loader_k8s_versions))
+        error_message = "Failed Semantic Version check for gateway_loader_k8s_versions."
+    }
+}
+
+variable "gateway_loader_calico_versions" {
+    type        = list(string)
+    default     = ["3.15"]
+    description = ""
+    validation {
+        condition = can(length([for version in var.gateway_loader_calico_versions : regex("^(0|[1-9][0-9]*)[.](0|[1-9][0-9]*)(|[.](0|[1-9][0-9]*))$", version)]) == length(var.gateway_loader_calico_versions))
+        error_message = "Failed Semantic Version check for gateway_loader_calico_versions."
+    }
+}
+
+variable "gateway_loader_csi_versions" {
+    type        = list(string)
+    default     = ["2.2.0"]
+    description = ""
+    validation {
+        condition = can(length([for version in var.gateway_loader_csi_versions : regex("^(0|[1-9][0-9]*)[.](0|[1-9][0-9]*)[.](0|[1-9][0-9]*)$", version)]) == length(var.gateway_loader_csi_versions))
+        error_message = "Failed Semantic Version check for gateway_loader_csi_versions."
+    }
+}
+
+variable "gateway_loader_extras" {
+    type        = list(string)
+    default     = [
+                    "plndr/kube-vip:0.3.2",
+                    "quay.io/coreos/prometheus-operator:v0.34.0",
+                    "quay.io/coreos/prometheus-config-reloader:v0.34.0",
+                    "quay.io/coreos/configmap-reload:v0.0.1",
+                    "quay.io/prometheus/prometheus:v2.7.1"
+                ]
+    description = ""
 }

@@ -1,11 +1,11 @@
 output "gateway_repo" {
-    value = "${var.gateway.subnet.gateway}:8080"
+    value = "${var.gateway_subnet_gateway}:8080"
 }
 
 output "gateway_registry" {
-    value = "${var.gateway.subnet.gateway}"
+    value = "${var.gateway_subnet_gateway}"
 }
 
 output "gateway_etcd" {
-    value = "${var.gateway.subnet.gateway}:2379"
+    value = "${var.gateway_subnet_gateway}:2379"
 }

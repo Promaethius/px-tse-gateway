@@ -20,8 +20,8 @@ provider "vsphere" {
 }
 
 locals {
-    ssh-rsa = var.gateway.ssh-rsa != "" ? var.gateway.ssh-rsa : (fileexists("~/.ssh/id_rsa.pub") ? file("~/.ssh/id_rsa.pub") : "")
-    name    = "${var.gateway.hostname}-${random_string.hash.result}"
+    ssh-rsa = var.gateway_ssh != "" ? var.gateway_ssh : (fileexists("~/.ssh/id_rsa.pub") ? file("~/.ssh/id_rsa.pub") : "")
+    name    = "${var.gateway_hostname}-${random_string.hash.result}"
 }
 
 resource "random_string" "hash" {
@@ -77,19 +77,19 @@ data "template_file" "gateway" {
         ssh-rsa  = local.ssh-rsa
         hostname = local.name
 
-        public-static  = var.gateway.public-static
-        public-gateway = var.gateway.public-gateway
+        public-static  = var.gateway_public_ip
+        public-gateway = var.gateway_public_gateway
 
-        subnet-gateway = var.gateway.subnet.gateway
-        subnet-min     = var.gateway.subnet.min
-        subnet-max     = var.gateway.subnet.max
-        intra-dns      = join(" ", var.gateway.subnet.intra_dns)
+        subnet-gateway = var.gateway_subnet_gateway
+        subnet-min     = var.gateway_subnet_min
+        subnet-max     = var.gateway_subnet_max
+        intra-dns      = join(" ", var.gateway_subnet_intra_dns)
 
-        px-versions     = join(" ", var.gateway.loader.px-versions)
-        k8s-versions    = join(" ", var.gateway.loader.k8s-versions)
-        calico-versions = join(" ", var.gateway.loader.calico-versions)
-        csi-versions    = join(" ", var.gateway.loader.csi-versions)
-        extras          = join(" ", var.gateway.loader.extras)
+        px-versions     = join(" ", var.gateway_loader_px_versions)
+        k8s-versions    = join(" ", var.gateway_loader_k8s_versions)
+        calico-versions = join(" ", var.gateway_loader_calico_versions)
+        csi-versions    = join(" ", var.gateway_loader_csi_versions)
+        extras          = join(" ", var.gateway_loader_extras)
     }
 }
 
