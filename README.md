@@ -61,6 +61,7 @@ Simply run `sudo systemctl restart etcd` and your portworx keys will be wiped.
 ### Trusting Registry CA
 Note: `export $GATEWAY_IP=<gateway_ip>`
 These commands can be run through machines on the subnet and will import the registry CA into trusted stores.
+Must be run as root.
 
 Debian/Ubuntu:
 ```
