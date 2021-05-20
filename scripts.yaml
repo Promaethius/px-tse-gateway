@@ -216,10 +216,11 @@ storage:
           K8S_VERSIONS=(${K8S_VERSIONS:=1.18.2 1.20.1})
           CALICO_VERSIONS=(${CALICO_VERSIONS:=3.15})
           CSI_VERSIONS=(${CSI_VERSIONS:=2.2.0})
-          EXTRAS=(${EXTRAS:=plndr/kube-vip:0.3.2})
+          EXTRAS=(${EXTRAS:=plndr/kube-vip:0.3.2 quay.io/coreos/prometheus-operator:v0.34.0 quay.io/coreos/prometheus-config-reloader:v0.34.0 quay.io/coreos/configmap-reload:v0.0.1 quay.io/prometheus/prometheus:v2.7.1 gcr.io/cloud-provider-vsphere/cpi/release/manager:v1.18.1})
 
           validate_ip $GATEWAY
-          for _version in "${PX_VERSIONS[@]} ${K8S_VERSIONS[@]} ${CALICO_VERSIONS[@]} ${CSI_VERSIONS[@]}"; do
+          _versions=(${PX_VERSIONS[@]} ${K8S_VERSIONS[@]} ${CALICO_VERSIONS[@]} ${CSI_VERSIONS[@]})
+          for _version in ${_versions[@]}; do
               validate_version $_version
           done
 
