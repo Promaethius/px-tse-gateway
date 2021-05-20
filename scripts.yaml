@@ -223,6 +223,21 @@ storage:
               validate_version $_version
           done
 
+          _config="version: 0.1
+          log:
+            level: info
+          http:
+            addr: 0.0.0.0:443
+            tls:
+              certificate: /etc/docker/registry/certs.d/server.crt
+              key: /etc/docker/registry/certs.d/server.key
+          storage:
+            filesystem:
+              rootdirectory: /var/lib/registry
+            delete:
+              enabled: false
+          "
+
           _certificates() {
               _prefix=/etc/registry/certs.d
               if [[ ! -d $_prefix ]]; then mkdir -p $_prefix; fi
@@ -247,148 +262,88 @@ storage:
               fi
           }
 
-          _render() {
-              if [[ ! -d /etc/registry ]]; then mkdir -p /etc/registry; fi
-              _ro=$1
-              _config="version: 0.1
-          log:
-            level: info
-          http:
-            addr: 0.0.0.0:443
-            tls:
-              certificate: /etc/docker/registry/certs.d/server.crt
-              key: /etc/docker/registry/certs.d/server.key
-          storage:
-            filesystem:
-              rootdirectory: /var/lib/registry
-            delete:
-              enabled: false
-            maintenance:
-              readonly:
-                enabled: $_ro
-          "
-              echo "$_config"
-          }
-
           _load() {
-              if [[ ! -f /etc/registry/config-loader.yml ]]; then
-                  _render false > /etc/registry/config-loader.yml
-              fi
               if [[ ! -d /etc/registry/certs.d ]]; then
                   echo "registry.sh certificates must be run first."
                   exit 1
               fi
-              docker run \
-                  -d --rm \
-                  --name registry-loader \
-                  -v /etc/registry/certs.d:/etc/docker/registry/certs.d:ro \
-                  -v /etc/registry/config-loader.yml:/etc/docker/registry/config.yml:ro \
-                  -v /var/lib/registry:/var/lib/registry \
-                  -p $GATEWAY:443:443 \
-                  registry:2
               _stripper() {
                   echo "$1" | sed -e "s@docker.io/@@g;s@k8s.gcr.io/@@g;s@gcr.io/@@g;s@quay.io/@@g;s@^@$GATEWAY/@g"
               }
-              if [[ -f /var/lib/registry/images.lock ]]; then
-                  _scanned_images=()
-                  _registry_images=(`curl https://$GATEWAY/v2/_catalog -q 2>/dev/null | jq -r '.repositories[]'`)
-                  for _registry_image in ${_registry_images[@]}; do
-                      _tags=(`curl https://$GATEWAY/v2/$_registry_image/tags/list 2>/dev/null | jq -r '.tags[]'`)
-                      for _tag in ${_tags[@]}; do                          
-                          _scanned_images=(
-                              ${_scanned_images[@]}
-                              `echo "$_registry_image:$_tag" | sed -e "s@^@$GATEWAY/@g"`
-                          )
-                      done
-                  done
-                  _scanned_images=(`echo "${_scanned_images[@]}" | tr ' ' '\n' | sort -u | tr '\n' ' '`)
-                  _locked_images=(`cat /var/lib/registry/images.lock`)
-                  _locked_images=(`echo "${_locked_images[@]}" | tr ' ' '\n' | sort -u | tr '\n' ' '`)
-                  _scanned_number=0
-                  for _locked_image in ${_locked_images[@]}; do
-                      for _scanned_image in ${_scanned_images[@]}; do
-                          if [[ "$_locked_image" == "$_scanned_image" ]]; then _scanned_number=$(($_scanned_number + 1)); fi
-                      done
-                  done
-                  if [[ "$_scanned_number" == "${#_locked_images[@]}" ]]; then 
-                      echo "Registry is up to date."
-                      exit 0
-                  fi
-                  rm -f /var/lib/registry/images.lock
-              fi
-              _record() {
-                  if [[ ! -d /var/lib/registry ]]; then mkdir -p /var/lib/registry; fi
-                  echo "$1" >> /var/lib/registry/images.lock
+              _skopeo() {
+                  docker run --rm --name skopeo \
+                      -v /etc/ssl:/etc/ssl:ro \
+                      quay.io/skopeo/stable $@
               }
               set -e
-              for _px in ${PX_VERSIONS[@]}; do
-                  for _k8s in ${K8S_VERSIONS[@]}; do
-                      _script=`mktemp`
-                      curl -o $_script -L "https://install.portworx.com/$_px/air-gapped?kbver=$_k8s" 2>/dev/null
-                      if [[ $? != 0 ]]; then continue; fi
-                      bash $_script pull
-                      bash $_script push $GATEWAY
-                      _rmi=(
-                          ${_rmi[@]}
-                          `bash $_script --dry-run pull 2>/dev/null | sed -n -e 's/^.*pull //p'`
-                      )
-                      rm $_script
+              if [[ -f /var/lib/registry/images.lock ]]; then
+                  _locked_images=(`cat /var/lib/registry/images.lock | tr ' ' '\n' | sort -u | tr '\n' ' '`)
+                  for _locked_image in ${_locked_images[@]}; do
+                      _skopeo inspect docker://`_stripper $_locked_images` > /dev/null 2>&1
+                      if [[ $? != 0 ]]; then _skopeo copy docker://$_locked_images docker://`_stripper $_locked_images`; fi
                   done
-              done
-              _rmi=(`echo "${_rmi[@]}" | tr ' ' '\n' | sort -u | tr '\n' ' '`)
-              for _image in ${_rmi[@]}; do
-                  _record `echo "$_image" | sed -e "s@docker.io/@@g;s@quay.io/@@g;s@^@$GATEWAY/@g"`
-                  docker rmi $_image
-              done
-              for _k8s in ${K8S_VERSIONS[@]}; do
-                  _images=(
-                      ${_images[@]}
-                      "k8s.gcr.io/kube-apiserver:v$_k8s"
-                      "k8s.gcr.io/kube-controller-manager:v$_k8s"
-                      "k8s.gcr.io/kube-scheduler:v$_k8s"
-                      "k8s.gcr.io/kube-proxy:v$_k8s"
-                      "gcr.io/cloud-provider-vsphere/cpi/release/manager:v$_k8s"
-                  )
-                  _minor=`echo $_k8s | cut -d . -f 1-2`
-                  _k8s_constants="`curl https://raw.githubusercontent.com/kubernetes/kubernetes/release-$_minor/cmd/kubeadm/app/constants/constants.go 2>/dev/null`"
-                  _k8s_constants="$_k8s_constants\n`curl https://raw.githubusercontent.com/kubernetes/kubernetes/release-$_minor/cmd/kubeadm/app/constants/constants_unix.go 2>/dev/null`"
-                  _coredns=`echo "$_k8s_constants" | grep 'CoreDNSVersion =' | cut -d'"' -f2`
-                  _etcd=`echo "$_k8s_constants" | grep 'DefaultEtcdVersion =' | cut -d'"' -f2`
-                  _pause=`echo "$_k8s_constants" | grep 'PauseVersion =' | cut -d'"' -f2`
-                  if [[ $_coredns != "" ]]; then _images=(${_images[@]} "k8s.gcr.io/coredns:$_coredns"); fi
-                  if [[ $_etcd != "" ]]; then _images=(${_images[@]} "k8s.gcr.io/etcd:$_etcd"); fi
-                  if [[ $_pause != "" ]]; then _images=(${_images[@]} "k8s.gcr.io/pause:$_pause"); fi
-              done
-              for _calico in ${CALICO_VERSIONS[@]}; do
-                  _images=(
-                      ${_images[@]}
-                      `curl -q https://docs.projectcalico.org/v$_calico/manifests/calico.yaml 2>/dev/null | grep image: | sed -n -e 's/^.*image: //p'`
-                  )
-              done
-              for _csi in ${CSI_VERSIONS[@]}; do
-                  _images=(
-                      ${_images[@]}
-                      `curl -q https://raw.githubusercontent.com/kubernetes-sigs/vsphere-csi-driver/v$_csi/manifests/v$_csi/deploy/vsphere-csi-controller-deployment.yaml 2>/dev/null | grep image: | sed -n -e 's/^.*image: //p'`
-                      `curl -q https://raw.githubusercontent.com/kubernetes-sigs/vsphere-csi-driver/v$_csi/manifests/v$_csi/deploy/vsphere-csi-node-ds.yaml 2>/dev/null | grep image: | sed -n -e 's/^.*image: //p'`
-                  )
-              done
-              for _extra in ${EXTRAS[@]}; do
-                  _images=(
-                      ${_images[@]}
-                      $_extra
-                  )
-              done
-              _images=(`echo "${_images[@]}" | tr ' ' '\n' | sort -u | tr '\n' ' '`)
-              for _image in ${_images[@]}; do
-                  docker pull $_image
-                  if [[ $? != 0 ]]; then continue; fi
-                  _push=`_stripper $_image`
-                  docker tag $_image $_push
-                  docker push $_push
-                  docker rmi $_image $_push
-                  _record $_push
-              done
-              docker stop registry-loader
+              else
+                  _record() {
+                      if [[ ! -d /var/lib/registry ]]; then mkdir -p /var/lib/registry; fi
+                      echo "$1" >> /var/lib/registry/images.lock
+                  }
+                  for _px in ${PX_VERSIONS[@]}; do
+                      for _k8s in ${K8S_VERSIONS[@]}; do
+                          _script=`mktemp`
+                          curl -o $_script -L "https://install.portworx.com/$_px/air-gapped?kbver=$_k8s" 2>/dev/null
+                          if [[ $? != 0 ]]; then continue; fi
+                          _images=(
+                              ${_images[@]}
+                              `bash $_script --dry-run pull 2>/dev/null | sed -n -e 's/^.*pull //p'`
+                          )
+                          rm $_script
+                      done
+                  done
+                  for _k8s in ${K8S_VERSIONS[@]}; do
+                      _images=(
+                          ${_images[@]}
+                          "k8s.gcr.io/kube-apiserver:v$_k8s"
+                          "k8s.gcr.io/kube-controller-manager:v$_k8s"
+                          "k8s.gcr.io/kube-scheduler:v$_k8s"
+                          "k8s.gcr.io/kube-proxy:v$_k8s"
+                          "gcr.io/cloud-provider-vsphere/cpi/release/manager:v$_k8s"
+                      )
+                      _minor=`echo $_k8s | cut -d . -f 1-2`
+                      _k8s_constants="`curl https://raw.githubusercontent.com/kubernetes/kubernetes/release-$_minor/cmd/kubeadm/app/constants/constants.go 2>/dev/null`"
+                      _k8s_constants="$_k8s_constants\n`curl https://raw.githubusercontent.com/kubernetes/kubernetes/release-$_minor/cmd/kubeadm/app/constants/constants_unix.go 2>/dev/null`"
+                      _coredns=`echo "$_k8s_constants" | grep 'CoreDNSVersion =' | cut -d'"' -f2`
+                      _etcd=`echo "$_k8s_constants" | grep 'DefaultEtcdVersion =' | cut -d'"' -f2`
+                      _pause=`echo "$_k8s_constants" | grep 'PauseVersion =' | cut -d'"' -f2`
+                      if [[ $_coredns != "" ]]; then _images=(${_images[@]} "k8s.gcr.io/coredns:$_coredns"); fi
+                      if [[ $_etcd != "" ]]; then _images=(${_images[@]} "k8s.gcr.io/etcd:$_etcd"); fi
+                      if [[ $_pause != "" ]]; then _images=(${_images[@]} "k8s.gcr.io/pause:$_pause"); fi
+                  done
+                  for _calico in ${CALICO_VERSIONS[@]}; do
+                      _images=(
+                          ${_images[@]}
+                          `curl -q https://docs.projectcalico.org/v$_calico/manifests/calico.yaml 2>/dev/null | grep image: | sed -n -e 's/^.*image: //p'`
+                      )
+                  done
+                  for _csi in ${CSI_VERSIONS[@]}; do
+                      _images=(
+                          ${_images[@]}
+                          `curl -q https://raw.githubusercontent.com/kubernetes-sigs/vsphere-csi-driver/v$_csi/manifests/v$_csi/deploy/vsphere-csi-controller-deployment.yaml 2>/dev/null | grep image: | sed -n -e 's/^.*image: //p'`
+                          `curl -q https://raw.githubusercontent.com/kubernetes-sigs/vsphere-csi-driver/v$_csi/manifests/v$_csi/deploy/vsphere-csi-node-ds.yaml 2>/dev/null | grep image: | sed -n -e 's/^.*image: //p'`
+                      )
+                  done
+                  for _extra in ${EXTRAS[@]}; do
+                      _images=(
+                          ${_images[@]}
+                          $_extra
+                      )
+                  done
+                  _images=(`echo "${_images[@]}" | tr ' ' '\n' | sort -u | tr '\n' ' '`)
+                  for _image in ${_images[@]}; do
+                      if [[ $? != 0 ]]; then continue; fi
+                      _skopeo copy docker://$_image docker://`_stripper $_image`
+                      _record $_image
+                  done
+              fi
               set e
           }
 
@@ -405,26 +360,21 @@ storage:
                   docker pull registry:2
                   ;;
               run)
+                  if [[ ! -d /etc/registry ]]; then mkdir -p /etc/registry; fi
                   if [[ ! -f /etc/registry/config.yml ]]; then
-                      _render true > /etc/registry/config.yml
+                      echo "$_config" > /etc/registry/config.yml
                   fi
                   if [[ `ls /etc/registry/certs.d` == "" ]]; then
                       echo "registry.sh certificates must be run first."
                       exit 1
                   fi
-                  _loader=`docker ps -f name=registry-loader --format "{{.Names}} {{.RunningFor}}"`
-                  if [[ $_loader == "" ]]; then
-                      docker run \
-                          --name registry \
-                          -v /etc/registry/certs.d:/etc/docker/registry/certs.d:ro \
-                          -v /etc/registry/config.yml:/etc/docker/registry/config.yml:ro \
-                          -v /var/lib/registry:/var/lib/registry \
-                          -p $GATEWAY:443:443 \
-                          registry:2
-                  else
-                      echo "Waiting for $_loader..."
-                      sleep 10
-                  fi
+                  docker run \
+                      --name registry \
+                      -v /etc/registry/certs.d:/etc/docker/registry/certs.d:ro \
+                      -v /etc/registry/config.yml:/etc/docker/registry/config.yml:ro \
+                      -v /var/lib/registry:/var/lib/registry \
+                      -p $GATEWAY:443:443 \
+                      registry:2
                   ;;
               *)
                   echo "registry.sh

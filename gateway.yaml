@@ -87,9 +87,8 @@ systemd:
         Restart=always
         RestartSec=10
         ExecStartPre=-/opt/registry.sh pre
-        ExecStartPre=/opt/registry.sh load
-        ExecStartPre=-/opt/registry.sh pre
         ExecStart=/opt/registry.sh run
+        ExecStartPost=-/opt/registry.sh load
 
         [Install]
         WantedBy=multi-user.target
