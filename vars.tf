@@ -17,25 +17,34 @@ variable "vsphere" {
         datastore  = ""
         folderpath = ""
     }
-    description = ""
+    description = <<EOF
+vSphere Configuration:
+user: vSphere username
+password: vSphere password
+server: vSphere server endpoint
+host: ESXi host within vSphere
+datacenter: vSphere datacenter containing host
+datastore: backing datastore attached to host
+folderpath: underneath datacenter, folder path to host
+    EOF
 }
 
 variable "gateway_hostname" {
     type        = string
     default     = "gateway"
-    description = ""
+    description = "Gateway VM Hostname"
 }
 
 variable "gateway_ssh" {
     type        = string
     default     = ""
-    description = ""
+    description = "Public SSH key. If one is not provided, then ~/.ssh/id_rsa.pub is scanned."
 }
 
 variable "gateway_public_ip" {
     type        = string
-    default     = "10.15.84.25"
-    description = ""
+    default     = ""
+    description = "Static IP for gateway VM within vSphere."
     validation {
         condition = can(try(cidrhost("${var.gateway_public_ip}/0", 0)) != "" ? true : false)
         error_message = "Failed IPv4 check for gateway_public_ip."
@@ -44,8 +53,8 @@ variable "gateway_public_ip" {
 
 variable "gateway_public_gateway" {
     type        = string
-    default     = "10.15.84.1"
-    description = ""
+    default     = ""
+    description = "Outgoing gateway for traffic from gateway VM."
     validation {
         condition = can(try(cidrhost("${var.gateway_public_gateway}/0", 0)) != "" ? true : false)
         error_message = "Failed IPv4 check for gateway_public_gateway."
@@ -55,7 +64,7 @@ variable "gateway_public_gateway" {
 variable "gateway_subnet_gateway" {
     type        = string
     default     = "192.167.0.1"
-    description = ""
+    description = "Subnet gateway IP. x.x.x.1 is required."
     validation {
         condition = can(try(cidrhost("${var.gateway_subnet_gateway}/0", 0)) != "" ? true : false)
         error_message = "Failed IPv4 check for gateway_subnet_gateway."
@@ -65,7 +74,7 @@ variable "gateway_subnet_gateway" {
 variable "gateway_subnet_min" {
     type        = string
     default     = ""
-    description = ""
+    description = "Min IPv4 address to lease to subnet from DHCP. Default is x.x.x.2"
     validation {
         condition = can(var.gateway_subnet_min == "" ? true : (try(cidrhost("${var.gateway_subnet_min}/0", 0)) != "" ? true : false))
         error_message = "Failed IPv4 check for gateway_subnet_min."
@@ -75,7 +84,7 @@ variable "gateway_subnet_min" {
 variable "gateway_subnet_max" {
     type        = string
     default     = ""
-    description = ""
+    description = "Max IPv4 address to lease to subnet from DHCP. Default is x.x.x.249"
     validation {
         condition = can(var.gateway_subnet_max == "" ? true : (try(cidrhost("${var.gateway_subnet_max}/0", 0)) != "" ? true : false))
         error_message = "Failed IPv4 check for gateway_subnet_max."
@@ -84,8 +93,8 @@ variable "gateway_subnet_max" {
 
 variable "gateway_subnet_intra_dns" {
     type        = list(string)
-    default     = ["10.14.250.53", "10.14.250.250"]
-    description = ""
+    default     = [""]
+    description = "List of IPs that point to internal nameservers."
     validation {
         condition = can(length([for ip in var.gateway_subnet_intra_dns : (try(cidrhost("${ip}/0", 0)) != "" ? true : false)]) == length(var.gateway_subnet_intra_dns))
         error_message = "Failed IPv4 check for gateway_subnet_intra_dns."
@@ -95,7 +104,7 @@ variable "gateway_subnet_intra_dns" {
 variable "gateway_loader_px_versions" {
     type        = list(string)
     default     = ["2.6.0", "2.7.0"]
-    description = ""
+    description = "Portworx versions to load into registry."
     validation {
         condition = can(length([for version in var.gateway_loader_px_versions : regex("^(0|[1-9][0-9]*)[.](0|[1-9][0-9]*)[.](0|[1-9][0-9]*)$", version)]) == length(var.gateway_loader_px_versions))
         error_message = "Failed Semantic Version check for gateway_loader_px_versions."
@@ -105,7 +114,7 @@ variable "gateway_loader_px_versions" {
 variable "gateway_loader_k8s_versions" {
     type        = list(string)
     default     = ["1.18.2", "1.20.1"]
-    description = ""
+    description = "Kubernetes component versions to load into registry."
     validation {
         condition = can(length([for version in var.gateway_loader_k8s_versions : regex("^(0|[1-9][0-9]*)[.](0|[1-9][0-9]*)[.](0|[1-9][0-9]*)$", version)]) == length(var.gateway_loader_k8s_versions))
         error_message = "Failed Semantic Version check for gateway_loader_k8s_versions."
@@ -115,7 +124,7 @@ variable "gateway_loader_k8s_versions" {
 variable "gateway_loader_calico_versions" {
     type        = list(string)
     default     = ["3.15"]
-    description = ""
+    description = "Calico versions to load into registry."
     validation {
         condition = can(length([for version in var.gateway_loader_calico_versions : regex("^(0|[1-9][0-9]*)[.](0|[1-9][0-9]*)(|[.](0|[1-9][0-9]*))$", version)]) == length(var.gateway_loader_calico_versions))
         error_message = "Failed Semantic Version check for gateway_loader_calico_versions."
@@ -125,7 +134,7 @@ variable "gateway_loader_calico_versions" {
 variable "gateway_loader_csi_versions" {
     type        = list(string)
     default     = ["2.2.0"]
-    description = ""
+    description = "vSphere Container Storage Interface versions to load into registry."
     validation {
         condition = can(length([for version in var.gateway_loader_csi_versions : regex("^(0|[1-9][0-9]*)[.](0|[1-9][0-9]*)[.](0|[1-9][0-9]*)$", version)]) == length(var.gateway_loader_csi_versions))
         error_message = "Failed Semantic Version check for gateway_loader_csi_versions."
@@ -141,5 +150,5 @@ variable "gateway_loader_extras" {
                     "quay.io/coreos/configmap-reload:v0.0.1",
                     "quay.io/prometheus/prometheus:v2.7.1"
                 ]
-    description = ""
+    description = "Additional container images to load into registry."
 }

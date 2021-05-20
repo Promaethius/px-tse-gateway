@@ -26,6 +26,9 @@ module "gateway" {
         datastore  = "" #Required i.e. "Jonathan-DS"
         folderpath = "" #Optional i.e. "/jbryant/"
     }
+
+    gateway_public_ip      = "" #Required. Must be a free static IP.
+    gateway_public_gateway = "" #Required
 }
 ```
 Once provisioned, you should be able to ssh into the gateway with the static address you specified.
